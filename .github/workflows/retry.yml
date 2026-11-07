@@ -6,6 +6,7 @@ on:
 concurrency: retry
 permissions:
   actions: write
+  contents: read
 jobs:
   go:
     runs-on: ubuntu-latest
@@ -40,5 +41,5 @@ jobs:
             if echo "$OUT" | grep -qiE "capacity|TooManyRequests"; then echo "$(date +%T) keine Kapazitaet"; else echo "$OUT"; fi
             [ $i -lt 4 ] && sleep 120
           done
-          gh workflow run retry.yml
+          gh workflow run retry.yml --ref main
           exit 0
