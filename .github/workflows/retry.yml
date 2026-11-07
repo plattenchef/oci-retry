@@ -1,7 +1,7 @@
 name: retry
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 concurrency: retry
 permissions:
@@ -29,15 +29,14 @@ jobs:
           chmod 600 ~/.oci/key.pem ~/.oci/config
           C=$OCI_TENANCY
           EX=$(oci compute instance list --compartment-id "$C" --display-name mc-rescue --query 'data[?"lifecycle-state"!=`TERMINATED`]|[0].id' --raw-output 2>&1)
-          echo "EX=$EX"
           if echo "$EX" | grep -q "ocid1.instance"; then gh workflow disable retry.yml; exit 0; fi
           AD=$(oci iam availability-domain list --compartment-id "$C" --query 'data[0].name' --raw-output 2>&1)
-          echo "AD=$AD"
           BV=$(oci bv boot-volume list --compartment-id "$C" --availability-domain "$AD" --query 'data[0].id' --raw-output 2>&1)
-          echo "BV=$BV"
           SN=$(oci network subnet list --compartment-id "$C" --query 'data[?"prohibit-public-ip-on-vnic"==`false`]|[0].id' --raw-output 2>&1)
-          echo "SN=$SN"
           if ! echo "$BV" | grep -q "ocid1.bootvolume" || ! echo "$SN" | grep -q "ocid1.subnet"; then echo "FEHLER: BV oder SN ungueltig"; exit 1; fi
-          OUT=$(oci --no-retry compute instance launch --compartment-id "$C" --availability-domain "$AD" --subnet-id "$SN" --assign-public-ip true --source-boot-volume-id "$BV" --display-name mc-rescue --shape VM.Standard.A1.Flex --shape-config '{"ocpus":1,"memoryInGBs":1}' 2>&1)
-          echo "$OUT"
-          if echo "$OUT" | grep -q PROVISIONING; then gh workflow disable retry.yml; fi
+          for i in 1 2 3 4; do
+            OUT=$(oci --no-retry compute instance launch --compartment-id "$C" --availability-domain "$AD" --subnet-id "$SN" --assign-public-ip true --source-boot-volume-id "$BV" --display-name mc-rescue --shape VM.Standard.A1.Flex --shape-config '{"ocpus":1,"memoryInGBs":1}' 2>&1)
+            if echo "$OUT" | grep -q PROVISIONING; then echo "ERFOLG"; gh workflow disable retry.yml; exit 0; fi
+            if echo "$OUT" | grep -qiE "capacity|TooManyRequests"; then echo "$(date +%T) keine Kapazitaet"; else echo "$OUT"; fi
+            [ $i -lt 4 ] && sleep 120
+          done
