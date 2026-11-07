@@ -29,7 +29,7 @@ jobs:
           chmod 600 ~/.oci/key.pem ~/.oci/config
           C=$OCI_TENANCY
           EX=$(oci compute instance list --compartment-id "$C" --display-name mc-rescue --query 'data[?"lifecycle-state"!=`TERMINATED`]|[0].id' --raw-output 2>&1)
-          if echo "$EX" | grep -q "ocid1.instance"; then gh workflow disable retry.yml; exit 0; fi
+          if echo "$EX" | grep -q "ocid1.instance"; then echo "Instanz existiert"; gh workflow disable retry.yml; exit 0; fi
           AD=$(oci iam availability-domain list --compartment-id "$C" --query 'data[0].name' --raw-output 2>&1)
           BV=$(oci bv boot-volume list --compartment-id "$C" --availability-domain "$AD" --query 'data[0].id' --raw-output 2>&1)
           SN=$(oci network subnet list --compartment-id "$C" --query 'data[?"prohibit-public-ip-on-vnic"==`false`]|[0].id' --raw-output 2>&1)
@@ -40,3 +40,5 @@ jobs:
             if echo "$OUT" | grep -qiE "capacity|TooManyRequests"; then echo "$(date +%T) keine Kapazitaet"; else echo "$OUT"; fi
             [ $i -lt 4 ] && sleep 120
           done
+          gh workflow run retry.yml
+          exit 0
